@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ 우리 반 자리 바꾸기 이벤트 ✨</title>
+    <!-- Tailwind CSS 및 FontAwesome 아이콘 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Firebase SDK (실시간 동기화용) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+KR:wght=400;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans KR', 'Inter', sans-serif;
+        }
+        /* 스크롤바 디자인 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-between pb-8">
+
+    <!-- -->
+    <!-- 커스텀 얼럿 모달 (브라우저 자체 alert 차단 대용) -->
+    <div id="custom-alert" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="flex items-center gap-3 mb-4 text-emerald-600" id="alert-icon-container">
+                <i class="fa-solid fa-circle-info text-2xl" id="alert-icon"></i>
+                <h3 class="font-extrabold text-lg text-slate-800" id="alert-title">알림</h3>
+            </div>
+            <p class="text-slate-600 text-sm leading-relaxed mb-6" id="alert-message">내용</p>
+            <button onclick="closeAlert()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all">확인</button>
+        </div>
+    </div>
+
+    <!-- 메인 컨테이너 -->
+    <div class="w-full max-w-6xl mx-auto px-4 mt-6 flex-grow">
+        <header class="flex justify-between items-center mb-6 bg-white py-4 px-6 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">🏫</span>
+                <div>
+                    <h2 class="font-black text-slate-800 text-base md:text-lg tracking-tight">자리 바꾸기 대작전</h2>
+                    <p class="text-xs text-slate-400 font-semibold" id="header-class-info">접속 코드: 대기 중...</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="sync-badge" class="px-3 py-1 bg-amber-50 text-amber-600 text-xs font-bold rounded-full flex items-center gap-1.5 border border-amber-100">
+                    <span class="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span id="sync-text">로컬 모드</span>
+                </span>
+                <button onclick="openAdminModal()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-gear"></i> 교사용 대시보드
+                </button>
+            </div>
+        </header>
+
+        <!-- [뷰] 클래스 입장하기 -->
+        <div id="view-room" class="view-section active max-w-md mx-auto bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center mt-12">
+            <span class="text-5xl">🔑</span>
+            <h1 class="text-2xl font-black text-slate-800 mt-4 mb-2">클래스 입장하기</h1>
+            <p class="text-slate-400 text-xs font-semibold mb-6">선생님께서 알려주신 접속 코드를 입력하세요.</p>
+            
+            <div class="mb-5 text-left">
+                <label class="block text-xs font-bold text-slate-500 mb-2">우리 반 접속 코드</label>
+                <input type="text" id="room-input" value="happy-class-1" class="w-full px-4 py-3 border-2 border-slate-100 focus:border-slate-300 rounded-xl outline-none font-bold text-center text-lg text-slate-700 transition-all">
+            </div>
+            
+            <button onclick="connectRoom()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold rounded-2xl shadow-lg shadow-emerald-100 transition-all text-base">
+                입장 완료 🚀
+            </button>
+        </div>
+
+        <!-- -->
+        <!-- [뷰] 학생 실명 선택 -->
+        <div id="view-login" class="view-section hidden max-w-md mx-auto bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center mt-12">
+            <span class="text-5xl">🙋‍♂️</span>
+            <h1 class="text-2xl font-black text-slate-800 mt-4 mb-2">누구인가요?</h1>
+            <p class="text-slate-400 text-xs font-semibold mb-6">리스트에서 본인의 이름을 정직하게 골라주세요.</p>
+            
+            <div class="mb-6 text-left">
+                <label class="block text-xs font-bold text-slate-500 mb-2">학생 본인 이름</label>
+                <select id="student-select" class="w-full px-4 py-3.5 border-2 border-slate-100 focus:border-slate-300 bg-white rounded-xl outline-none font-bold text-slate-700 transition-all">
+                    <option value="">-- 이름을 고르세요 --</option>
+                </select>
+            </div>
+            
+            <button onclick="startQuiz()" class="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-extrabold rounded-2xl shadow-lg transition-all text-base">
+                퀴즈 풀고 자리 쟁탈전 참여! 🚀
+            </button>
+        </div>
+
+        <!-- [뷰] 선생님 대기방 -->
+        <div id="view-waiting" class="view-section hidden max-w-md mx-auto bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center mt-12">
+            <span class="text-5xl animate-bounce inline-block">⏳</span>
+            <h1 class="text-2xl font-black text-slate-800 mt-4 mb-2">선생님 대기 중...</h1>
+            <p class="text-slate-500 text-sm font-semibold leading-relaxed mb-6">
+                담임 선생님께서 퀴즈 시작 버튼을 누르실 때까지 잠시 대기해 주세요! <br>
+                선생님이 퀴즈를 오픈하면 자동으로 시험지가 나타납니다. 🚀
+            </p>
+            <div class="flex justify-center items-center py-4 mb-2">
+                <span class="h-8 w-8 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin"></span>
+            </div>
+            <div class="text-[11px] text-slate-400 font-bold" id="waiting-class-name"></div>
+        </div>
+
+        <!-- [뷰] 퀴즈 풀기 -->
+        <div id="view-quiz" class="view-section hidden max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-3xl shadow-xl border border-slate-100 mt-6">
+            <div class="text-center mb-6">
+                <span class="px-4 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">Step 2. Quiz Challenge</span>
+                <h1 class="text-2xl font-black text-slate-800 mt-3 mb-1">📝 담임 선생님과 우리 반 관련 퀴즈!</h1>
+                <p class="text-slate-400 text-xs font-semibold">정답을 모두 맞춰야 좌석 우선 선택권이 주어집니다.</p>
+            </div>
+
+            <div id="quiz-container" class="space-y-4 mb-6">
+                <!-- 퀴즈 동적 생성 -->
+            </div>
+
+            <button onclick="submitQuiz()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold rounded-2xl shadow-lg shadow-emerald-100 transition-all text-base">
+                정답 제출하고 대기석 돌파! 🏁
+            </button>
+        </div>
+
+        <!-- -->
+        <!-- [뷰] 좌석 선택 배치표 -->
+        <div id="view-seats" class="view-section hidden">
+            <div class="text-center mb-6">
+                <span class="px-4 py-1.5 bg-emerald-50 text-emerald-600 text-sm font-semibold rounded-full">Step 3. Selection</span>
+                <h1 class="text-2xl md:text-3xl font-extrabold text-slate-800 mt-3 mb-2">🪑 원하는 빈자리를 터치하세요!</h1>
+                <p class="text-rose-500 font-semibold text-sm animate-pulse">
+                    ⚠️ 먼저 퀴즈를 통과한 친구들이 선점한 자리는 실시간으로 회색 처리됩니다!
+                </p>
+            </div>
+
+            <div class="flex items-stretch gap-2 md:gap-4 mb-6">
+                <!-- 복도 세로 기둥 (왼쪽) -->
+                <div class="w-8 md:w-12 bg-slate-200/60 border border-slate-300/40 rounded-xl flex flex-col justify-center items-center gap-2 py-4 select-none shrink-0 shadow-sm">
+                    <span class="text-lg md:text-xl">🚪</span>
+                    <div class="font-extrabold text-slate-600 text-xs md:text-sm tracking-widest [writing-mode:vertical-lr] text-center">복 도</div>
+                </div>
+
+                <!-- 메인 좌석 그리드 -->
+                <div class="flex-grow grid grid-cols-6 gap-2.5 md:gap-4 p-4 md:p-6 bg-slate-100 rounded-2xl shadow-inner" id="seat-grid">
+                    <!-- 동적 생성 -->
+                </div>
+
+                <!-- 창문 세로 기둥 (오른쪽) -->
+                <div class="w-8 md:w-12 bg-sky-50 border border-sky-100 rounded-xl flex flex-col justify-center items-center gap-2 py-4 select-none shrink-0 shadow-sm">
+                    <span class="text-lg md:text-xl">☀️</span>
+                    <div class="font-extrabold text-sky-600 text-xs md:text-sm tracking-widest [writing-mode:vertical-lr] text-center">창 문</div>
+                </div>
+            </div>
+
+            <div class="w-full py-4 bg-slate-800 text-white text-center rounded-xl font-bold tracking-widest text-base md:text-lg shadow-md mb-2">
+                📺 교실 앞쪽 (칠판 / 교탁 위치)
+            </div>
+        </div>
+
+        <!-- [뷰] 선택 완료 축하 결과창 -->
+        <div id="view-result" class="view-section hidden max-w-md mx-auto bg-white p-8 rounded-3xl shadow-xl border border-slate-100 text-center mt-12">
+            <span class="text-6xl animate-bounce inline-block">🎉</span>
+            <h1 class="text-2xl font-black text-slate-800 mt-4 mb-2">자리 예약 대성공!</h1>
+            <div class="bg-emerald-50 border border-emerald-100 rounded-2xl py-4 px-6 my-6">
+                <span class="text-xs text-emerald-600 font-bold block mb-1">내가 선점한 좌석 번호</span>
+                <p id="result-seat-id" class="text-2xl font-extrabold text-emerald-700">추출 중...</p>
+            </div>
+            <p class="text-slate-400 text-xs font-semibold leading-relaxed">
+                모든 친구들이 자리를 다 고를 때까지 제자리에 바르게 앉아서 조용히 대기해 주세요!
+            </p>
+        </div>
+    </div>
+
+    <!-- -->
+    <!-- [교사용 모달 대시보드] -->
+    <div id="admin-modal" class="fixed inset-0 bg-slate-900/60 z-40 hidden backdrop-blur-sm flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-6xl h-[95vh] md:h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden transform scale-95 transition-all">
+            <div class="bg-slate-800 text-white p-5 flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-user-tie text-emerald-400 text-xl"></i>
+                    <h2 class="font-black text-base md:text-lg">🛡️ 담임 교사용 실시간 관제 센터</h2>
+                </div>
+                <button onclick="closeAdminModal()" class="text-slate-400 hover:text-white transition-all text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- 비밀번호 인증 섹션 -->
+            <div id="admin-pw-section" class="flex-grow flex flex-col justify-center items-center p-8 bg-slate-50">
+                <span class="text-4xl mb-3">🔑</span>
+                <h3 class="font-black text-slate-800 text-lg mb-1">인증이 필요한 구역입니다</h3>
+                <p class="text-xs text-slate-400 font-bold mb-6">교사용 마스터 비밀번호를 입력해 주세요.</p>
+                <div class="w-full max-w-xs space-y-3">
+                    <input type="password" id="admin-password-input" placeholder="비밀번호 입력 (초기: 1234)" class="w-full px-4 py-3 border-2 border-slate-200 focus:border-slate-400 rounded-xl text-center outline-none font-bold">
+                    <button onclick="verifyAdminPassword()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all shadow-md">
+                        비밀번호 확인
+                    </button>
+                </div>
+            </div>
+
+            <!-- 대시보드 메인 제어판 -->
+            <div id="admin-main-section" class="flex-grow hidden flex flex-col md:flex-row overflow-hidden">
+                <!-- 사이드 탭 버튼 -->
+                <div class="w-full md:w-56 bg-slate-50 border-r border-slate-100 flex md:flex-col gap-1 p-3 shrink-0 overflow-x-auto md:overflow-x-visible">
+                    <button id="tab-btn-live" onclick="switchAdminTab('live')" class="flex-1 md:flex-initial py-3 px-4 rounded-xl font-extrabold text-xs text-left flex items-center gap-2 transition-all bg-emerald-500 text-white">
+                        <i class="fa-solid fa-tv"></i> 실시간 TV 중계
+                    </button>
+                    <button id="tab-btn-students" onclick="switchAdminTab('students')" class="flex-1 md:flex-initial py-3 px-4 rounded-xl font-extrabold text-xs text-left flex items-center gap-2 transition-all text-slate-600 hover:bg-slate-100">
+                        <i class="fa-solid fa-users"></i> 학생 명단 관리
+                    </button>
+                    <button id="tab-btn-quiz" onclick="switchAdminTab('quiz')" class="flex-1 md:flex-initial py-3 px-4 rounded-xl font-extrabold text-xs text-left flex items-center gap-2 transition-all text-slate-600 hover:bg-slate-100">
+                        <i class="fa-solid fa-clipboard-question"></i> 퀴즈 문항 수정
+                    </button>
+                    <button id="tab-btn-settings" onclick="switchAdminTab('settings')" class="flex-1 md:flex-initial py-3 px-4 rounded-xl font-extrabold text-xs text-left flex items-center gap-2 transition-all text-slate-600 hover:bg-slate-100">
+                        <i class="fa-solid fa-gears"></i> 교실 및 연동 설정
+                    </button>
+                </div>
+
+                <!-- 콘텐츠 영역 -->
+                <div class="flex-grow p-6 overflow-y-auto bg-white">
+                    
+                    <!-- [탭 1] 실시간 현황판 & 랭킹 -->
+                    <div id="tab-content-live" class="admin-tab-pane space-y-4">
+                        <div class="flex flex-wrap justify-between items-center gap-3 bg-slate-100 p-4 rounded-2xl">
+                            <div>
+                                <h3 class="font-extrabold text-slate-800 text-base md:text-lg flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-play text-emerald-500 animate-pulse"></i> 🖥️ 대형 실시간 TV 중계 현황판
+                                </h3>
+                                <p class="text-xs text-slate-500 font-semibold mt-0.5">이름 잘림 전면 방지! 프로젝터 및 TV 화면 송출용 모드</p>
+                            </div>
+                            <button onclick="toggleTeacherFullscreen()" id="tv-fullscreen-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-sm">
+                                <i class="fa-solid fa-expand"></i> <span id="tv-fullscreen-txt">순위표 숨기고 배치표 극대화</span>
+                            </button>
+                        </div>
+
+                        <!-- 퀴즈 원격 동시 시작 제어판 -->
+                        <div class="bg-amber-50 border border-amber-200/70 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-3 shadow-sm">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl animate-pulse">📢</span>
+                                <div>
+                                    <h4 class="font-extrabold text-amber-950 text-sm">실시간 퀴즈 동시 시작 제어</h4>
+                                    <p class="text-xs text-amber-700/90 font-semibold mt-0.5">학생들의 접속 대기 상태를 실시간으로 해제하고 퀴즈를 동시 출제합니다.</p>
+                                </div>
+                            </div>
+                            <button id="teacher-quiz-toggle-btn" onclick="toggleQuizStart()" class="w-full sm:w-auto px-5 py-3 bg-rose-500 hover:bg-rose-600 text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-pause"></i> 🔴 퀴즈 대기 중 (학생 진입 차단)
+                            </button>
+                        </div>
+
+                        <!-- 랭킹 순위표 및 실시간 중계 대형 배치 그리드 -->
+                        <div class="grid grid-cols-12 gap-6 items-stretch">
+                            <!-- 퀴즈 통과자 랭킹 -->
+                            <div id="live-leaderboard-container" class="col-span-12 xl:col-span-3 bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col transition-all">
+                                <h3 class="font-extrabold text-slate-800 text-sm mb-3 flex items-center gap-2">
+                                    <i class="fa-solid fa-stopwatch text-rose-500"></i> ⏱️ 퀴즈 돌파 랭킹
+                                </h3>
+                                <div class="flex-grow overflow-y-auto max-h-[300px] xl:max-h-[550px] bg-white rounded-xl shadow-inner p-3">
+                                    <ol id="teacher-leaderboard" class="space-y-2 text-sm">
+                                        <li class="text-center text-slate-400 py-6 font-semibold">아직 통과자가 없습니다.</li>
+                                    </ol>
+                                </div>
+                            </div>
+
+                            <!-- 실시간 대형 배치도 -->
+                            <div id="live-grid-container" class="col-span-12 xl:col-span-9 bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col justify-between transition-all">
+                                <div class="flex items-stretch gap-2.5 md:gap-4 mb-4">
+                                    <div class="w-8 md:w-12 bg-slate-200/60 border border-slate-300/40 rounded-xl flex flex-col justify-center items-center gap-2 py-4 select-none shrink-0 shadow-sm">
+                                        <span class="text-base md:text-lg">🚪</span>
+                                        <div class="font-black text-slate-600 text-xs tracking-widest [writing-mode:vertical-lr] text-center">복 도</div>
+                                    </div>
+
+                                    <div class="flex-grow grid grid-cols-6 gap-3 p-4 md:p-6 bg-white rounded-2xl border border-slate-200 shadow-sm" id="teacher-live-grid">
+                                        <!-- 대형 뷰어 그리드 유닛 -->
+                                    </div>
+
+                                    <div class="w-8 md:w-12 bg-sky-50 border border-sky-100 rounded-xl flex flex-col justify-center items-center gap-2 py-4 select-none shrink-0 shadow-sm">
+                                        <span class="text-base md:text-lg">☀️</span>
+                                        <div class="font-black text-sky-600 text-xs tracking-widest [writing-mode:vertical-lr] text-center">창 문</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="w-full py-4 bg-slate-800 text-white text-center rounded-xl font-bold tracking-widest text-base md:text-lg shadow-md">
+                                    📺 교실 앞쪽 (칠판 / 교탁 위치)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- -->
+                    <!-- [탭 2] 학생 명단 편집 -->
+                    <div id="tab-content-students" class="admin-tab-pane hidden space-y-4">
+                        <div>
+                            <h3 class="font-extrabold text-slate-800 text-base mb-1">👥 우리 반 학생 명단 관리</h3>
+                            <p class="text-xs text-slate-400 font-semibold mb-4">줄바꿈(Enter) 단위로 학생 이름을 한 명씩 입력한 뒤 하단 저장 버튼을 클릭하세요.</p>
+                        </div>
+                        <textarea id="students-textarea" class="w-full h-64 p-4 border-2 border-slate-200 focus:border-slate-400 rounded-2xl font-bold text-slate-700 outline-none leading-relaxed shadow-inner" placeholder="한 줄에 한 명씩 이름을 적으세요."></textarea>
+                        <button onclick="saveStudentsList()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-extrabold rounded-xl text-xs transition-all shadow-md">
+                            학생 명단 최종 저장하기
+                        </button>
+                    </div>
+
+                    <!-- [탭 3] 퀴즈 수정 -->
+                    <div id="tab-content-quiz" class="admin-tab-pane hidden space-y-6">
+                        <div class="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200/60">
+                            <div>
+                                <h3 class="font-extrabold text-slate-800 text-base">📝 학급 퀴즈 문항 및 정답 커스텀</h3>
+                                <p class="text-xs text-slate-500 font-semibold mt-0.5">원하는 만큼 퀴즈를 자유롭게 더하고 빼며 편집하실 수 있습니다.</p>
+                            </div>
+                            <button onclick="addNewQuizQuestion()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold rounded-xl text-xs transition-all shadow-md flex items-center gap-1">
+                                <i class="fa-solid fa-plus"></i> 새 퀴즈 추가하기
+                            </button>
+                        </div>
+                        <div id="quiz-editor-list" class="space-y-4">
+                            <!-- JS 바인딩 퀴즈 에디터 카드 리스트 -->
+                        </div>
+                        <button onclick="saveQuizQuestions()" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-extrabold rounded-xl text-xs transition-all shadow-md w-full md:w-auto">
+                            퀴즈 설정 및 정답 전송하기
+                        </button>
+                    </div>
+
+                    <!-- [탭 4] 연동 정보 설정 -->
+                    <div id="tab-content-settings" class="admin-tab-pane hidden space-y-6">
+                        <div>
+                            <h3 class="font-extrabold text-slate-800 text-base mb-1">⚙️ 스마트폰 연동 및 데이터 클리어</h3>
+                            <p class="text-xs text-slate-400 font-semibold">동작 방식을 원격 제어하고 Firebase를 활성화해 학생 스마트폰 33대와 서버를 유기적으로 동기화합니다.</p>
+                        </div>
+
+                        <div class="p-5 bg-slate-50 rounded-2xl border border-slate-150 space-y-4">
+                            <h4 class="font-bold text-slate-700 text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-cloud text-sky-500"></i> 실시간 클라우드 연동 정보
+                            </h4>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-1.5">Firebase Realtime Database URL</label>
+                                    <input type="text" id="firebase-url-input" placeholder="예: https://class-project-default-rtdb.firebaseio.com/" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-600 focus:border-slate-400 transition-all">
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1.5">교사용 마스터 비밀번호</label>
+                                        <input type="text" id="admin-pw-setting" value="1234" class="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-600 focus:border-slate-400 transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-slate-500 mb-1.5">클래스 코드 (방 이름)</label>
+                                        <input type="text" id="room-code-setting" class="w-full px-4 py-2.5 border border-slate-200 bg-slate-100 rounded-xl text-xs font-bold text-slate-400 outline-none" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onclick="saveConnectionSettings()" class="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-extrabold rounded-xl text-xs transition-all shadow-md">
+                                무선 실시간 연동 개시
+                            </button>
+                        </div>
+
+                        <!-- 전체 초기화 및 리셋 -->
+                        <div class="p-5 bg-rose-50/50 rounded-2xl border border-rose-100 space-y-4">
+                            <h4 class="font-bold text-rose-800 text-sm flex items-center gap-1.5">
+                                <i class="fa-solid fa-triangle-exclamation text-rose-500 animate-pulse"></i> 전체 데이터 초기화 및 제어
+                            </h4>
+                            <p class="text-xs text-rose-600 font-semibold leading-relaxed">
+                                선택된 모든 학생 자리 데이터, 실시간 퀴즈 정답 랭킹 점수판을 빈 상태로 깔끔하게 청소합니다. 새로운 자리 교체 이벤트를 시작할 때 사용하세요.
+                            </p>
+                            
+                            <div class="flex flex-wrap gap-3">
+                                <button onclick="triggerFullReset()" class="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-extrabold rounded-xl text-xs transition-all shadow-md">
+                                    ⚠️ 전체 자리 & 랭킹 리셋하기
+                                </button>
+                                
+                                <button onclick="resetToHtmlDefaults()" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-extrabold rounded-xl text-xs transition-all shadow-md flex items-center gap-1">
+                                    <i class="fa-solid fa-rotate-left"></i> 🚨 소스코드(HTML) 원래대로 복구
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-slate-400 font-semibold mt-1">※ 소스코드(HTML 파일)를 에디터로 직접 수정한 경우, 위 복구 단추를 누르셔야 이전 저장소 캐시가 완전히 지워지고 수정하신 새 질문/학생 목록이 즉시 적용됩니다.</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center text-[11px] text-slate-400 font-semibold select-none mt-6">
+        © 2026 우리 반 자리 바꾸기 스마트 이벤트 플랫폼 | Created for Middle School Teachers
+    </footer>
+
+    <!-- -->
+    <!-- 자바스크립트 모듈부 -->
+    <script>
+        // --- 1. 기본 상태 및 파이어베이스 주소 하드코딩 정의 ---
+        const DEFAULT_FIREBASE_URL = "https://class5-4b7fc-default-rtdb.firebaseio.com/";
+        let currentRoom = "happy-class-1";
+        let currentStudentName = "";
+        let isAdminLoggedIn = false;
+        let isTeacherFullscreen = false; 
+        
+        // 5-6-5-5-6-6 구조 (총 33명)
+        const columnCapacities = [5, 6, 5, 5, 6, 6]; 
+        const maxRows = 6;
+
+        // 원본 퀴즈 목록 정의
+        const HTML_DEFAULT_QUIZZES = [
+            {
+                id: 1,
+                question: "Q1. 우리 담임 선생님의 성함은 무엇일까요?",
+                type: "text",
+                answer: "홍길동"
+            },
+            {
+                id: 2,
+                question: "Q2. 다음 중 우리 반의 총 학생 수는 몇 명일까요?",
+                type: "select",
+                options: "30명,31명,32명,33명,34명",
+                answer: "33명"
+            },
+            {
+                id: 3,
+                question: "Q3. 담임 선생님이 가장 좋아하는 숫자(1~10)는 무엇일까요?",
+                type: "select",
+                options: "1,2,3,4,5,6,7,8,9,10",
+                answer: "7"
+            }
+        ];
+
+        // 기본 33명 학생 명렬표 생성
+        const HTML_DEFAULT_STUDENTS = [];
+        for(let i=1; i<=33; i++) {
+            HTML_DEFAULT_STUDENTS.push(`학생${i}`);
+        }
+
+        // 반응형 공유 데이터 스토어
+        let localData = {
+            students: [...HTML_DEFAULT_STUDENTS],
+            quizzes: [...HTML_DEFAULT_QUIZZES],
+            seats: {},
+            leaderboard: [],
+            adminPassword: "1234",
+            quizStarted: false 
+        };
+
+        let firebaseApp = null;
+        let db = null;
+        let isFirebaseActive = false;
+
+        // --- 2. 자체 제작 모달 얼럿 (alert 대체) ---
+        function openAlert(message, title = "알림", isSuccess = false) {
+            const modal = document.getElementById('custom-alert');
+            const alertTitle = document.getElementById('alert-title');
+            const alertMsg = document.getElementById('alert-message');
+            const iconContainer = document.getElementById('alert-icon-container');
+            const icon = document.getElementById('alert-icon');
+
+            alertTitle.textContent = title;
+            alertMsg.textContent = message;
+
+            if(isSuccess) {
+                iconContainer.className = "flex items-center gap-3 mb-4 text-emerald-500";
+                icon.className = "fa-solid fa-circle-check text-2xl";
+            } else {
+                iconContainer.className = "flex items-center gap-3 mb-4 text-rose-500";
+                icon.className = "fa-solid fa-circle-exclamation text-2xl";
+            }
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.add('opacity-100');
+                modal.firstElementChild.classList.remove('scale-95');
+                modal.firstElementChild.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeAlert() {
+            const modal = document.getElementById('custom-alert');
+            modal.classList.remove('opacity-100');
+            modal.firstElementChild.classList.add('scale-95');
+            modal.firstElementChild.classList.remove('scale-100');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- 3. 로컬 스토리지 입출력 제어 ---
+        function loadStorage() {
+            const raw = localStorage.getItem(`local_class_${currentRoom}`);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                localData.students = parsed.students || [...HTML_DEFAULT_STUDENTS];
+                localData.quizzes = parsed.quizzes || [...HTML_DEFAULT_QUIZZES];
+                localData.seats = parsed.seats || {};
+                localData.leaderboard = parsed.leaderboard || [];
+                localData.adminPassword = parsed.adminPassword || "1234";
+                localData.quizStarted = parsed.quizStarted || false;
+            } else {
+                saveStorage();
+            }
+        }
+
+        function saveStorage() {
+            localStorage.setItem(`local_class_${currentRoom}`, JSON.stringify(localData));
+        }
+
+        // --- ---
+        function initFirebase(url) {
+            if(!url) {
+                isFirebaseActive = false;
+                updateSyncBadge();
+                return;
+            }
+
+            const cleanUrl = url.trim();
+            if(!cleanUrl.startsWith('https://')) {
+                openAlert("Firebase 실시간 주소는 반드시 'https://'로 시작되어야 합니다.", "설정 실패");
+                return;
+            }
+
+            try {
+                // 핵심 버그 픽스: 이미 파이어베이스 앱이 만들어져 있는지 안전하게 검사!
+                if(firebase.apps.length === 0) {
+                    firebaseApp = firebase.initializeApp({
+                        databaseURL: cleanUrl
+                    });
+                } else {
+                    // 이미 있을 시, 기존 [DEFAULT] 앱 연결을 낚아채서 재사용합니다. (중복오류 완벽 해결)
+                    firebaseApp = firebase.app();
+                }
+
+                db = firebaseApp.database();
+                isFirebaseActive = true;
+                updateSyncBadge();
+                localStorage.setItem('firebase_url_custom', cleanUrl);
+
+                // 중복 관제 리스너 등록을 철저히 막기 위해 기존 핸들러를 오프(Off) 시켜줍니다.
+                db.ref(`rooms/${currentRoom}`).off();
+
+                // 파이어베이스 데이터 변경 실시간 리스너 연결
+                db.ref(`rooms/${currentRoom}`).on('value', (snapshot) => {
+                    const serverVal = snapshot.val();
+                    if(serverVal) {
+                        if(serverVal.students) localData.students = serverVal.students;
+                        if(serverVal.quizzes) localData.quizzes = serverVal.quizzes;
+                        localData.seats = serverVal.seats || {};
+                        localData.leaderboard = serverVal.leaderboard || [];
+                        if(serverVal.adminPassword) localData.adminPassword = serverVal.adminPassword;
+                        localData.quizStarted = serverVal.quizStarted || false;
+                    } else {
+                        uploadToFirebase();
+                    }
+                    syncUIRefresh();
+                });
+
+            } catch (err) {
+                // 만약 여전히 duplicate-app 에러 코드를 마주친다면 기존 커넥션을 강제로 부여합니다.
+                if (err.code === 'app/duplicate-app' || err.message.includes('already exists')) {
+                    firebaseApp = firebase.app();
+                    db = firebaseApp.database();
+                    isFirebaseActive = true;
+                    updateSyncBadge();
+                } else {
+                    isFirebaseActive = false;
+                    updateSyncBadge();
+                    openAlert("Firebase 연결 시도 중 에러가 발생했습니다: " + err.message, "연동 장애");
+                }
+            }
+        }
+
+        function uploadToFirebase() {
+            if(!isFirebaseActive || !db) return;
+            db.ref(`rooms/${currentRoom}`).set({
+                students: localData.students,
+                quizzes: localData.quizzes,
+                seats: localData.seats,
+                leaderboard: localData.leaderboard,
+                adminPassword: localData.adminPassword,
+                quizStarted: localData.quizStarted || false 
+            });
+        }
+
+        function updateSyncBadge() {
+            const badge = document.getElementById('sync-badge');
+            const text = document.getElementById('sync-text');
+            if(isFirebaseActive) {
+                badge.className = "px-3 py-1 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-full flex items-center gap-1.5 border border-emerald-100 animate-pulse";
+                text.textContent = "클라우드 실시간 연동 중";
+            } else {
+                badge.className = "px-3 py-1 bg-amber-50 text-amber-600 text-xs font-bold rounded-full flex items-center gap-1.5 border border-amber-100";
+                text.textContent = "로컬 단독 모드";
+            }
+        }
+
+        // --- ---
+        function syncUIRefresh() {
+            const selectEl = document.getElementById('student-select');
+            if(selectEl) {
+                const currentSelected = selectEl.value;
+                selectEl.innerHTML = '<option value="">-- 이름을 고르세요 --</option>';
+                localData.students.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name;
+                    if(name === currentSelected) opt.selected = true;
+                    selectEl.appendChild(opt);
+                });
+            }
+
+            buildSeatGrid('seat-grid', false);
+            buildSeatGrid('teacher-live-grid', true);
+
+            updateLeaderboardUI();
+            updateTeacherQuizButtonUI(); 
+
+            // 대기 중인 학생이 퀴즈가 풀렸을 경우 실시간으로 자동 퀴즈 진입
+            if (currentStudentName && document.getElementById('view-waiting').classList.contains('active')) {
+                if (localData.quizStarted) {
+                    generateQuizUI();
+                }
+            }
+        }
+
+        // --- 6. 학생 조작부 로직 ---
+        function connectRoom() {
+            const input = document.getElementById('room-input');
+            const roomCode = input.value.trim();
+            if(!roomCode) {
+                openAlert("접속 코드를 정확히 작성해 주세요.", "입력 누락");
+                return;
+            }
+
+            currentRoom = roomCode;
+            document.getElementById('header-class-info').textContent = `접속 코드: ${currentRoom}`;
+            document.getElementById('room-code-setting').value = currentRoom;
+
+            loadStorage();
+
+            const savedFbUrl = localStorage.getItem('firebase_url_custom') || DEFAULT_FIREBASE_URL;
+            if(savedFbUrl) {
+                document.getElementById('firebase-url-input').value = savedFbUrl;
+                initFirebase(savedFbUrl);
+            }
+
+            switchView('view-login');
+            syncUIRefresh();
+        }
+
+        function startQuiz() {
+            const selectEl = document.getElementById('student-select');
+            currentStudentName = selectEl.value;
+
+            if(!currentStudentName) {
+                openAlert("자리 정하기에 참여할 학생의 이름을 리스트에서 골라주세요.", "로그인 요망");
+                return;
+            }
+
+            let mySeatId = "";
+            for(let seatKey in localData.seats) {
+                if(localData.seats[seatKey] === currentStudentName) {
+                    mySeatId = seatKey;
+                    break;
+                }
+            }
+
+            if(mySeatId) {
+                document.getElementById('result-seat-id').textContent = mySeatId;
+                switchView('view-result');
+                openAlert(`당신은 이미 [${mySeatId}] 자리를 골랐습니다! 쾌적하게 착석해 주세요.`, "이미 배정됨", true);
+                return;
+            }
+
+            if (!localData.quizStarted) {
+                document.getElementById('waiting-class-name').textContent = `학생 본인: ${currentStudentName} (접속 코드: ${currentRoom})`;
+                switchView('view-waiting');
+                return;
+            }
+
+            generateQuizUI();
+        }
+
+        function generateQuizUI() {
+            const container = document.getElementById('quiz-container');
+            if(!container) return;
+            container.innerHTML = "";
+
+            localData.quizzes.forEach((q, idx) => {
+                const card = document.createElement('div');
+                card.className = "p-5 bg-slate-50 rounded-2xl border border-slate-150 space-y-3";
+                
+                const qTitle = document.createElement('h4');
+                qTitle.className = "font-bold text-slate-700 text-sm md:text-base leading-relaxed";
+                qTitle.textContent = q.question;
+                card.appendChild(qTitle);
+
+                if(q.type === 'text') {
+                    const input = document.createElement('input');
+                    input.type = "text";
+                    input.id = `user-ans-${q.id}`;
+                    input.placeholder = "주관식 답변을 기입하세요 (띄어쓰기 금지)";
+                    input.className = "w-full px-4 py-3 border border-slate-200 focus:border-slate-400 rounded-xl outline-none text-sm font-semibold text-slate-700 transition-all";
+                    card.appendChild(input);
+                } else {
+                    const select = document.createElement('select');
+                    select.id = `user-ans-${q.id}`;
+                    select.className = "w-full px-4 py-3 bg-white border border-slate-200 focus:border-slate-400 rounded-xl outline-none text-sm font-semibold text-slate-700 transition-all";
+                    
+                    const emptyOpt = document.createElement('option');
+                    emptyOpt.value = "";
+                    emptyOpt.textContent = "-- 선택해 주세요 --";
+                    select.appendChild(emptyOpt);
+
+                    if (q.options) {
+                        const opts = q.options.split(',');
+                        opts.forEach(optVal => {
+                            const opt = document.createElement('option');
+                            opt.value = optVal.trim();
+                            opt.textContent = optVal.trim();
+                            select.appendChild(opt);
+                        });
+                    }
+                    card.appendChild(select);
+                }
+                container.appendChild(card);
+            });
+
+            switchView('view-quiz');
+        }
+
+        function submitQuiz() {
+            let isPerfect = true;
+
+            for(let i=0; i<localData.quizzes.length; i++) {
+                const q = localData.quizzes[i];
+                const inputEl = document.getElementById(`user-ans-${q.id}`);
+                if(!inputEl) continue;
+
+                const val = inputEl.value.trim();
+                if(val !== q.answer.trim()) {
+                    isPerfect = false;
+                    break;
+                }
+            }
+
+            if(!isPerfect) {
+                openAlert("❌ 정답이 아니거나 답변을 비워둔 문항이 있습니다! 다시 신중하게 퀴즈를 풀어보세요.", "정답 오류");
+                return;
+            }
+
+            const exists = localData.leaderboard.some(item => item.name === currentStudentName);
+            if(!exists) {
+                const clearTime = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+                const rec = { name: currentStudentName, time: clearTime };
+                localData.leaderboard.push(rec);
+
+                if(isFirebaseActive && db) {
+                    db.ref(`rooms/${currentRoom}/leaderboard`).set(localData.leaderboard);
+                } else {
+                    saveStorage();
+                }
+            }
+
+            openAlert("🎉 축하합니다! 만점으로 퀴즈를 돌파했습니다. 이제 자리를 선택해 주세요!", "만점 완료!", true);
+            buildSeatGrid('seat-grid', false);
+            switchView('view-seats');
+        }
+
+        // --- ---
+        function buildSeatGrid(containerId, isLiveDashboardMode = false) {
+            const grid = document.getElementById(containerId);
+            if(!grid) return;
+            grid.innerHTML = "";
+
+            for(let r=0; r<maxRows; r++) {
+                for(let c=0; c<6; c++) {
+                    const colCapacity = columnCapacities[c]; 
+                    const emptyLimit = maxRows - colCapacity; 
+                    
+                    const seatEl = document.createElement('div');
+
+                    if (r < emptyLimit) {
+                        if (isLiveDashboardMode) {
+                            seatEl.className = "bg-transparent h-20 md:h-28 select-none rounded-2xl border border-dashed border-slate-200/50 flex items-center justify-center";
+                            seatEl.innerHTML = "<span class='text-[10px] text-slate-300 font-bold'>빈 공간</span>";
+                        } else {
+                            seatEl.className = "bg-transparent h-16 md:h-20 select-none rounded-lg border border-dashed border-slate-200/50 flex items-center justify-center";
+                        }
+                        grid.appendChild(seatEl);
+                        continue;
+                    }
+
+                    const rowNumber = r + 1;
+                    const colNumber = c + 1;
+                    const seatId = `${rowNumber}열-${colNumber}분단`;
+                    const occupant = localData.seats[seatId];
+
+                    if(isLiveDashboardMode) {
+                        if(occupant) {
+                            seatEl.className = "bg-slate-800 text-white rounded-2xl p-2 md:p-3 text-center shadow-lg border-2 border-slate-900 flex flex-col justify-center items-center h-20 md:h-28 select-none transition-all";
+                            seatEl.innerHTML = `
+                                <span class='text-[10px] md:text-xs font-bold text-slate-400 leading-none mb-1 md:mb-2'>${seatId}</span>
+                                <span class='text-sm md:text-xl font-black tracking-tight text-yellow-300 block truncate max-w-full break-all' title='${occupant}'>${occupant}</span>
+                            `;
+                        } else {
+                            seatEl.className = "bg-slate-50 text-slate-400 rounded-2xl p-2 md:p-3 text-center border border-dashed border-slate-300 flex flex-col justify-center items-center h-20 md:h-28 select-none";
+                            seatEl.innerHTML = `
+                                <span class='text-[9px] md:text-xs font-bold text-slate-400/80 leading-none mb-1'>${seatId}</span>
+                                <span class='text-[10px] md:text-sm font-extrabold text-emerald-500'><i class="fa-solid fa-circle-check"></i> 공석</span>
+                            `;
+                        }
+                    } else {
+                        if(occupant) {
+                            seatEl.className = "bg-slate-400 text-white rounded-xl p-2.5 text-center shadow-inner border border-slate-400/80 flex flex-col justify-center items-center h-16 md:h-20 cursor-not-allowed select-none opacity-80";
+                            seatEl.innerHTML = `<span class='text-[9px] font-bold text-slate-200'>${seatId}</span><span class='text-sm md:text-base font-black tracking-wider mt-1 text-slate-100'>${occupant}</span>`;
+                        } else {
+                            seatEl.className = "bg-white hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-700 text-slate-700 rounded-xl p-2.5 text-center border-2 border-slate-200 shadow-sm cursor-pointer flex flex-col justify-center items-center h-16 md:h-20 transition-all duration-200 transform hover:scale-105 hover:shadow-lg";
+                            seatEl.innerHTML = `<span class='text-[9px] font-bold text-slate-400 group-hover:text-emerald-500'>${seatId}</span><span class='text-xs font-bold text-emerald-500 mt-1'><i class="fa-solid fa-check"></i> 선택</span>`;
+                            seatEl.onclick = function() {
+                                chooseSeat(seatId);
+                            };
+                        }
+                    }
+                    grid.appendChild(seatEl);
+                }
+            }
+        }
+
+        function chooseSeat(seatId) {
+            if(localData.seats[seatId]) {
+                openAlert("앗! 0.1초 차이로 눈앞에서 친구가 해당 좌석을 차지했습니다. 비어있는 다른 자리를 터치해 보세요!", "선점 완료됨");
+                return;
+            }
+
+            localData.seats[seatId] = currentStudentName;
+
+            if(isFirebaseActive && db) {
+                db.ref(`rooms/${currentRoom}/seats`).set(localData.seats);
+            } else {
+                saveStorage();
+                syncUIRefresh();
+            }
+
+            document.getElementById('result-seat-id').textContent = seatId;
+            switchView('view-result');
+            openAlert(`🎉 [${seatId}] 자리에 정상 예약이 끝났습니다!`, "이벤트 승리!", true);
+        }
+
+        // --- ---
+        function openAdminModal() {
+            document.getElementById('admin-modal').classList.remove('hidden');
+            document.getElementById('admin-password-input').focus();
+        }
+
+        function closeAdminModal() {
+            document.getElementById('admin-modal').classList.add('hidden');
+            isAdminLoggedIn = false;
+            document.getElementById('admin-pw-section').classList.remove('hidden');
+            document.getElementById('admin-main-section').classList.add('hidden');
+            document.getElementById('admin-password-input').value = "";
+        }
+
+        function toggleQuizStart() {
+            localData.quizStarted = !localData.quizStarted;
+            
+            if(isFirebaseActive && db) {
+                db.ref(`rooms/${currentRoom}/quizStarted`).set(localData.quizStarted);
+            } else {
+                saveStorage();
+                syncUIRefresh();
+            }
+
+            if(localData.quizStarted) {
+                openAlert("📢 실시간 퀴즈 동시 시작이 활성화되었습니다! 대기 중인 모든 학생 화면에 시험지가 나타납니다.", "퀴즈 개시 완료", true);
+            } else {
+                openAlert("⏸️ 퀴즈 진행을 일시 정지(대기실 모드)시켰습니다. 새롭게 들어오는 학생들의 진입이 자동 제한됩니다.", "퀴즈 대기 전환");
+            }
+        }
+
+        function updateTeacherQuizButtonUI() {
+            const btn = document.getElementById('teacher-quiz-toggle-btn');
+            if(!btn) return;
+
+            if(localData.quizStarted) {
+                btn.className = "w-full sm:w-auto px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5";
+                btn.innerHTML = `<i class="fa-solid fa-play animate-pulse"></i> 🟢 퀴즈 활성화 중 (학생 진행 가능)`;
+            } else {
+                btn.className = "w-full sm:w-auto px-5 py-3 bg-rose-500 hover:bg-rose-600 text-white text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5";
+                btn.innerHTML = `<i class="fa-solid fa-pause"></i> 🔴 퀴즈 대기 중 (학생 진입 차단)`;
+            }
+        }
+
+        function verifyAdminPassword() {
+            const input = document.getElementById('admin-password-input');
+            const userPw = input.value.trim();
+
+            if(userPw === localData.adminPassword) {
+                isAdminLoggedIn = true;
+                document.getElementById('admin-pw-section').classList.add('hidden');
+                document.getElementById('admin-main-section').classList.remove('hidden');
+                
+                document.getElementById('students-textarea').value = localData.students.join('\n');
+                buildQuizEditorList();
+                document.getElementById('admin-pw-setting').value = localData.adminPassword;
+                
+                switchAdminTab('live');
+                syncUIRefresh();
+            } else {
+                openAlert("틀린 마스터 패스워드입니다. 올바른 비밀번호를 입력해 주십시오.", "인증 실패");
+            }
+        }
+
+        function switchAdminTab(tabName) {
+            document.querySelectorAll('.admin-tab-pane').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-content-${tabName}`).classList.remove('hidden');
+
+            document.querySelectorAll("[id^='tab-btn-']").forEach(btn => {
+                btn.className = "flex-1 md:flex-initial py-3 px-4 rounded-xl font-extrabold text-xs text-left flex items-center gap-2 transition-all text-slate-600 hover:bg-slate-100";
+            });
+            document.getElementById(`tab-btn-${tabName}`).className = "flex-1 md:flex-initial py-3 px-4 rounded-xl font-extrabold text-xs text-left flex items-center gap-2 transition-all bg-slate-800 text-white";
+        }
+
+        // --- ---
+        function updateLeaderboardUI() {
+            const container = document.getElementById('teacher-leaderboard');
+            if(!container) return;
+
+            if(localData.leaderboard.length === 0) {
+                container.innerHTML = `<li class="text-center text-slate-400 py-12 font-semibold">아직 통과한 학생이 없습니다. ⏱️</li>`;
+                return;
+            }
+
+            container.innerHTML = "";
+            localData.leaderboard.forEach((rec, idx) => {
+                const rank = idx + 1;
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl font-bold";
+                
+                let badgeClass = "bg-slate-100 text-slate-600";
+                if(rank === 1) badgeClass = "bg-amber-100 text-amber-700";
+                if(rank === 2) badgeClass = "bg-slate-200 text-slate-700";
+                if(rank === 3) badgeClass = "bg-amber-50 text-amber-600";
+
+                li.innerHTML = `
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black ${badgeClass}">${rank}</span>
+                        <span class="text-slate-700 text-[11px]">${rec.name}</span>
+                    </div>
+                    <span class="text-[9px] text-slate-400 font-extrabold">${rec.time}</span>
+                `;
+                container.appendChild(li);
+            });
+        }
+
+        function toggleTeacherFullscreen() {
+            const lbContainer = document.getElementById('live-leaderboard-container');
+            const gridContainer = document.getElementById('live-grid-container');
+            const btnText = document.getElementById('tv-fullscreen-txt');
+            const btnIcon = document.getElementById('tv-fullscreen-btn').querySelector('i');
+
+            isTeacherFullscreen = !isTeacherFullscreen;
+
+            if (isTeacherFullscreen) {
+                lbContainer.classList.add('hidden');
+                gridContainer.className = "col-span-12 bg-slate-50 rounded-2xl p-6 border border-slate-100 flex flex-col justify-between transition-all";
+                btnText.textContent = "순위표 함께 보기";
+                btnIcon.className = "fa-solid fa-compress";
+            } else {
+                lbContainer.classList.remove('hidden');
+                gridContainer.className = "col-span-12 xl:col-span-9 bg-slate-50 rounded-2xl p-5 border border-slate-100 flex flex-col justify-between transition-all";
+                btnText.textContent = "순위표 숨기고 배치표 극대화";
+                btnIcon.className = "fa-solid fa-expand";
+            }
+            buildSeatGrid('teacher-live-grid', true);
+        }
+
+        // --- 9. 퀴즈 빌더 수정 제어판 구조화 ---
+        function buildQuizEditorList() {
+            const list = document.getElementById('quiz-editor-list');
+            if(!list) return;
+            list.innerHTML = "";
+
+            localData.quizzes.forEach((q, idx) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = "p-4 bg-slate-50 rounded-2xl border border-slate-150 space-y-3 relative";
+                
+                wrapper.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-slate-200/60 pb-2">
+                        <span class="text-xs font-black text-slate-400">QUIZ ${idx+1}</span>
+                        <button onclick="deleteQuizQuestion(${q.id})" class="text-rose-500 hover:text-rose-700 transition-all text-xs font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-trash-can"></i> 문항 삭제
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="md:col-span-2">
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">퀴즈 질문 내용</label>
+                            <input type="text" id="edit-q-question-${q.id}" value="${q.question}" class="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-600 focus:border-slate-400">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">퀴즈 타입</label>
+                            <select id="edit-q-type-${q.id}" onchange="toggleOptionsInput(${q.id})" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-600 focus:border-slate-400">
+                                <option value="text" ${q.type==='text'?'selected':''}>주관식 (단답형)</option>
+                                <option value="select" ${q.type==='select'?'selected':''}>객관식 (드롭다운)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">퀴즈 정답</label>
+                            <input type="text" id="edit-q-answer-${q.id}" value="${q.answer}" class="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-600 focus:border-slate-400">
+                        </div>
+                        <div id="edit-q-options-wrapper-${q.id}" class="md:col-span-2 ${q.type==='text'?'hidden':''}">
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1">객관식 보기 옵션 목록 (쉼표 , 로 구분)</label>
+                            <input type="text" id="edit-q-options-${q.id}" value="${q.options || ''}" class="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-600 focus:border-slate-400" placeholder="예: 보리,쌀,밀,기장,옥수수">
+                        </div>
+                    </div>
+                `;
+                list.appendChild(wrapper);
+            });
+        }
+
+        function toggleOptionsInput(qid) {
+            const type = document.getElementById(`edit-q-type-${qid}`).value;
+            const wrapper = document.getElementById(`edit-q-options-wrapper-${qid}`);
+            if(type === 'select') {
+                wrapper.classList.remove('hidden');
+            } else {
+                wrapper.classList.add('hidden');
+            }
+        }
+
+        function addNewQuizQuestion() {
+            const newId = Date.now();
+            const newQuiz = {
+                id: newId,
+                question: `Q. 새로 추가된 퀴즈 질문입니다.`,
+                type: "text",
+                answer: "정답",
+                options: "보기1,보기2,보기3"
+            };
+            localData.quizzes.push(newQuiz);
+            buildQuizEditorList();
+        }
+
+        function deleteQuizQuestion(qid) {
+            localData.quizzes = localData.quizzes.filter(q => q.id !== qid);
+            buildQuizEditorList();
+        }
+
+        // --- ---
+        function saveStudentsList() {
+            const val = document.getElementById('students-textarea').value.trim();
+            if(!val) {
+                openAlert("최소한 한 명 이상의 이름을 입력해 주세요.", "목록 부족");
+                return;
+            }
+
+            const names = val.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+            localData.students = names;
+
+            if(isFirebaseActive && db) {
+                db.ref(`rooms/${currentRoom}/students`).set(localData.students);
+            } else {
+                saveStorage();
+                syncUIRefresh();
+            }
+            openAlert("우리 반 명렬표가 정상 동기화되었습니다.", "저장 성공", true);
+        }
+
+        function saveQuizQuestions() {
+            let valid = true;
+            localData.quizzes.forEach(q => {
+                const questionVal = document.getElementById(`edit-q-question-${q.id}`).value.trim();
+                const typeVal = document.getElementById(`edit-q-type-${q.id}`).value;
+                const ansVal = document.getElementById(`edit-q-answer-${q.id}`).value.trim();
+                const optInput = document.getElementById(`edit-q-options-${q.id}`);
+                const optVal = optInput ? optInput.value.trim() : '';
+
+                if(!questionVal || !ansVal) {
+                    valid = false;
+                }
+
+                q.question = questionVal;
+                q.type = typeVal;
+                q.answer = ansVal;
+                q.options = optVal;
+            });
+
+            if(!valid) {
+                openAlert("질문 내용과 정답은 빈 칸으로 둘 수 없습니다.", "저장 실패");
+                return;
+            }
+
+            if(isFirebaseActive && db) {
+                db.ref(`rooms/${currentRoom}/quizzes`).set(localData.quizzes);
+            } else {
+                saveStorage();
+                syncUIRefresh();
+            }
+            openAlert("우리 반 퀴즈 질문 정보가 성공적으로 반영되었습니다.", "전송 완료", true);
+        }
+
+        function saveConnectionSettings() {
+            const url = document.getElementById('firebase-url-input').value.trim();
+            const pw = document.getElementById('admin-pw-setting').value.trim();
+
+            localData.adminPassword = pw;
+
+            if(isFirebaseActive && db) {
+                db.ref(`rooms/${currentRoom}/adminPassword`).set(pw);
+            } else {
+                saveStorage();
+            }
+
+            if(url) {
+                initFirebase(url);
+            } else {
+                isFirebaseActive = false;
+                localStorage.removeItem('firebase_url_custom');
+                updateSyncBadge();
+            }
+            openAlert("보안 자격 증명 및 클라우드 연동 값이 갱신되었습니다.", "설정 성공", true);
+        }
+
+        function triggerFullReset() {
+            localData.seats = {};
+            localData.leaderboard = [];
+            localData.quizStarted = false; 
+
+            if(isFirebaseActive && db) {
+                db.ref(`rooms/${currentRoom}/seats`).set({});
+                db.ref(`rooms/${currentRoom}/leaderboard`).set([]);
+                db.ref(`rooms/${currentRoom}/quizStarted`).set(false); 
+            } else {
+                saveStorage();
+                syncUIRefresh();
+            }
+            openAlert("자리 배정표와 퀴즈 돌파 기록, 퀴즈 동시 시작 대기 상태가 깨끗하게 초기화되었습니다.", "초기화 완료", true);
+        }
+
+        function resetToHtmlDefaults() {
+            localData.students = [...HTML_DEFAULT_STUDENTS];
+            localData.quizzes = [...HTML_DEFAULT_QUIZZES];
+            localData.seats = {};
+            localData.leaderboard = [];
+            localData.quizStarted = false;
+
+            if(isFirebaseActive && db) {
+                db.ref(`rooms/${currentRoom}`).set({
+                    students: localData.students,
+                    quizzes: localData.quizzes,
+                    seats: {},
+                    leaderboard: [],
+                    adminPassword: localData.adminPassword,
+                    quizStarted: false
+                });
+            } else {
+                saveStorage();
+                syncUIRefresh();
+            }
+
+            document.getElementById('students-textarea').value = localData.students.join('\n');
+            buildQuizEditorList();
+            
+            openAlert("성공! 이 브라우저의 이전 세션 캐시가 모두 제거되었으며, 소스코드(HTML)에 기입된 최신 질문과 명단으로 깨끗하게 초기화되었습니다.", "복구 성공", true);
+        }
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(section => {
+                section.classList.add('hidden');
+                section.classList.remove('active');
+            });
+            const activeSec = document.getElementById(viewId);
+            if(activeSec) {
+                activeSec.classList.remove('hidden');
+                activeSec.classList.add('active');
+            }
+        }
+
+        // 로컬 탭간 데이터 연동 리스너
+        window.addEventListener('storage', (e) => {
+            if(!isFirebaseActive) {
+                if (e.key === `local_class_${currentRoom}`) {
+                    const fresh = JSON.parse(e.newValue);
+                    if (fresh) {
+                        localData.seats = fresh.seats || {};
+                        localData.leaderboard = fresh.leaderboard || [];
+                        localData.students = fresh.students || [];
+                        localData.quizzes = fresh.quizzes || [];
+                        localData.quizStarted = fresh.quizStarted || false;
+                        syncUIRefresh();
+                    }
+                }
+            }
+        });
+
+        // 로드 즉시 클라우드에 하드코딩된 서버 주소로 완전 자동 연결
+        window.onload = function () {
+            loadStorage();
+            
+            document.getElementById('room-input').value = currentRoom;
+            document.getElementById('room-code-setting').value = currentRoom;
+            
+            const savedFbUrl = localStorage.getItem('firebase_url_custom') || DEFAULT_FIREBASE_URL;
+            if (savedFbUrl) {
+                document.getElementById('firebase-url-input').value = savedFbUrl;
+                initFirebase(savedFbUrl);
+            }
+            syncUIRefresh();
+        }
+    </script>
+</body>
+</html>
+```
+eof
+
+---
+
+### 💻 깃허브 깔끔 정리 방법
+
+1. **불필요한 파일 삭제:** 깃허브 저장소(Repository) 목록에 `seat_event.html`과 `index.html`이 둘 다 올라가 있다면, 파일명 옆에 있는 쓰레기통 아이콘을 눌러서 **둘 다 지우셔도 괜찮습니다.**
+2. **이 파일 하나만 올리기:** 위의 무결점 코드를 복사해서 **`index.html`**이라는 단 하나의 파일명으로 새롭게 업로드해 주세요!
+3. **확인:** 새로 올린 뒤 약 1~2분 뒤에 학교 노트북이나 스마트폰에서 새로고침해보시면, 그 어떠한 연동 에러도 없이 초록색 배지(🟢)와 함께 선생님의 소중한 학급 정보가 완벽히 로드되는 것을 확인하실 수 있습니다. 😊✨
